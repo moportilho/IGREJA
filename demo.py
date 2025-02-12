@@ -341,15 +341,18 @@ def page_membros():
 
     # Exibição e edição dos membros
     st.subheader("Listagem de Membros")
+    membros_df_editavel = st.session_state["membros_data"].drop(columns=["foto"], errors="ignore")
+
     edited_df = st.data_editor(
-        membros_df,
+        membros_df_editavel,
         hide_index=True,
         use_container_width=True,
         key="membros_editor",
-        disabled=["matricula", "foto"]  # não permitir editar "foto" e "matricula"
+        ##disabled=["matricula", "foto"]  # não permitir editar "foto" e "matricula"
     )
     if st.button("Salvar Alterações de Edição"):
-        st.session_state["membros_data"] = edited_df
+        for coluna in membros_df_editavel.columns:
+            st.session_state["membros_data"][coluna] = edited_df[coluna]
         st.success("Alterações atualizadas localmente.")
 
     # Excluir membro
