@@ -13,6 +13,25 @@ from docx import Document
 st.set_page_config(page_title="Demonstração Local", layout="wide")
 
 # -----------------------------------------------------------------------------
+# Conexão com banco de dados
+# -----------------------------------------------------------------------------
+
+def get_connection():
+    server = 'igrejacanaa.database.windows.net,1433'
+    database = 'ibcanaa'
+    username = 'adm'
+    password = 'Igreja2025'
+    driver = '{ODBC Driver 18 for SQL Server}'
+    try:
+        conx = pyodbc.connect(
+            'Driver='+ driver + ';Server='+ server + ';Database=' + database + ';Uid=' + username + ';Pwd={' + password + '}'
+        )
+        return conx
+    except Exception as e:
+        st.error(f"Erro ao conectar ao banco de dados: {e}")
+        return None
+
+# -----------------------------------------------------------------------------
 # SEÇÃO DE LOGIN
 # -----------------------------------------------------------------------------
 # Definir credenciais (fixas para este exemplo)
