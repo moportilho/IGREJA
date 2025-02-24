@@ -21,7 +21,7 @@ def get_connection():
     database = 'ibcanaa'
     username = 'adm'
     password = 'Igreja2025'
-    driver = '{ODBC Driver 18 for SQL Server}'
+    driver = '{ODBC Driver 17 for SQL Server}'
     try:
         conx = pyodbc.connect(
             'Driver='+ driver + ';Server='+ server + ';Database=' + database + ';Uid=' + username + ';Pwd={' + password + '}'
