@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import time
 import datetime
 import pyodbc
 from io import BytesIO
@@ -66,8 +67,9 @@ def execute_query(query, params=None):
         else:
             cursor.execute(query)
         conx.commit()
+        if cursor.rowcount == 0:
+            return "Nenhuma linha foi afetada."
         return True
-    
 
     except Exception as e:
         error_message = str(e)
@@ -143,118 +145,173 @@ if "membros_data" not in st.session_state:
 # -----------------------------------------------------------------------------
 # PÁGINA 1: Cadastro da Igreja
 # -----------------------------------------------------------------------------
-
 def page_igreja():
-    st.header("Cadastro de Nova Igreja")
+    st.header("Cadastro de Igreja")
 
-    # Formulário simples para inserir SEM editar/excluir
-    with st.form("form_nova_igreja"):
+    # Verifica se já existe um cadastro na tabela Igreja
+    df_igreja = read_records("SELECT * FROM Igreja")
+    
+    # Inicializa a flag de edição, se não existir
+    if "editar_igreja" not in st.session_state:
+        st.session_state["editar_igreja"] = False
 
-        # Carrega o logotipo (opcional) e converte em binário (se VARBINARY no banco)
-        uploaded_logo = st.file_uploader("Selecione o logotipo da Igreja (opcional)", 
-                                         type=["png", "jpg", "jpeg"])
-        if uploaded_logo is not None:
-            logotipo_bin = uploaded_logo.read()
-        else:
-            logotipo_bin = None
-
-        cnpj_val = st.text_input("CNPJ da Igreja*")
-        data_abertura_val = st.date_input("Data de abertura*",  value=None, min_value=datetime.date(1900, 1, 1))
-        endereco_val = st.text_input("Endereço*")
-        pastor_nome_val = st.text_input("Nome do Pastor*")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            pastor_entrada_val = st.date_input(
-                "Data de Entrada do Pastor*",
-                 value=None, min_value=datetime.date(1900, 1, 1)
-            )
-        with col2:
-            pastor_saida_val = st.date_input(
-                "Data de Saída do Pastor*",
-                 value=None, min_value=datetime.date(1900, 1, 1)
-            )
-
-        # Botão para inserir no banco
-        submit_button = st.form_submit_button("Salvar Dados da Igreja")
-
-        if submit_button:
-            # Validações simples
-            erros = []
-            if not cnpj_val.strip():
-                erros.append("CNPJ da Igreja")
-            if not endereco_val.strip():
-                erros.append("Endereço")
-            if not pastor_nome_val.strip():
-                erros.append("Nome do Pastor")
-            if not data_abertura_val:
-                erros.append("Data de Abertura")
-            if not pastor_entrada_val:
-                erros.append("Data de Entrada do Pastor")
-            if not pastor_saida_val:
-                erros.append("Data de Saída do Pastor")
-
-            if erros:
-                texto_erros = "### Atenção!\n\n" \
-                              "Os seguintes campos obrigatórios não foram preenchidos:\n\n"
-                for campo in erros:
-                    texto_erros += f"- {campo}\n"
-                st.error(texto_erros)
-            else:
-                # Monta o INSERT
-                insert_sql = """
-                    INSERT INTO Igreja (
-                        logotipo,
-                        cnpj,
-                        data_abertura,
-                        endereco,
-                        pastor_nome,
-                        pastor_entrada,
-                        pastor_saida
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """
-
-                params_insert = (
-                    logotipo_bin,
-                    cnpj_val,
-                    data_abertura_val,
-                    endereco_val,
-                    pastor_nome_val,
-                    pastor_entrada_val,
-                    pastor_saida_val
-                )
-
-                # Chama sua função execute_query(...) que você já tem no código
-                ok = execute_query(insert_sql, params_insert)
-                if ok:
-                    st.success("Dados da Igreja salvos com sucesso!")
+    if not df_igreja.empty:
+        # Considerando que há apenas um registro
+        igreja = df_igreja.iloc[0]
+        
+        # Modo de Edição
+        if st.session_state["editar_igreja"]:
+            st.subheader("Editar Dados da Igreja")
+            with st.form("form_editar_igreja"):
+                # Campo para logotipo: se um novo for enviado, substitui; caso contrário, mantém o atual
+                uploaded_logo = st.file_uploader("Selecione um novo logotipo da Igreja (opcional)", 
+                                                   type=["png", "jpg", "jpeg"])
+                if uploaded_logo is not None:
+                    logotipo_bin = uploaded_logo.read()
                 else:
-                    st.error("Falha ao inserir dados da Igreja.")
-
-##DELETE
-    # Lê todas as igrejas do banco
-    df_igrejas = read_records("SELECT cnpj, pastor_nome FROM Igreja")
-    st.subheader("Excluir Igreja Cadastrada:")
-
-    # Seleciona a igreja a excluir com base no ID
-    igreja_ids = df_igrejas["cnpj"].tolist()
-    igreja_escolhida = st.selectbox(
-        "Selecione o CNPJ da Igreja que deseja excluir",
-        options=igreja_ids
-    )
-
-    if st.button("Confirmar Exclusão"):
-        # Faz o DELETE
-        delete_sql = "DELETE FROM Igreja WHERE cnpj = ?"
-        ok_delete = execute_query(delete_sql, (igreja_escolhida,))
-        if ok_delete:
-            st.success(f"Igreja {igreja_escolhida} excluída com sucesso.")
-            # Recarrega a listagem
-            df_igrejas = read_records("SELECT cnpj, pastor_nome FROM Igreja")
+                    logotipo_bin = igreja["logotipo"]
+                
+                # CNPJ não é editável, pois é a chave primária
+                cnpj_val = st.text_input("CNPJ da Igreja*", value=igreja["cnpj"], disabled=True)
+                data_abertura_val = st.date_input("Data de Abertura*", value=igreja["data_abertura"])
+                endereco_val = st.text_input("Endereço*", value=igreja["endereco"])
+                pastor_nome_val = st.text_input("Nome do Pastor*", value=igreja["pastor_nome"])
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=igreja["pastor_entrada"])
+                with col2:
+                    pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=igreja["pastor_saida"])
+                
+                submit_edit = st.form_submit_button("Atualizar Dados")
+                
+                if submit_edit:
+                    update_sql = """
+                        UPDATE Igreja
+                        SET logotipo = ?,
+                            data_abertura = ?,
+                            endereco = ?,
+                            pastor_nome = ?,
+                            pastor_entrada = ?,
+                            pastor_saida = ?
+                        WHERE cnpj = ?
+                    """
+                    params_update = (
+                        logotipo_bin,
+                        data_abertura_val,
+                        endereco_val,
+                        pastor_nome_val,
+                        pastor_entrada_val,
+                        pastor_saida_val,
+                        igreja["cnpj"]
+                    )
+                    ok_update = execute_query(update_sql, params_update)
+                    if ok_update:
+                        st.success("Dados da Igreja atualizados com sucesso!")
+                        st.session_state["editar_igreja"] = False
+                        st.rerun()  # Atualiza a página para refletir as mudanças
+                    else:
+                        st.error("Falha ao atualizar os dados da Igreja.")
+            
+            # Botão para cancelar a edição
+            if st.button("Cancelar Edição"):
+                st.session_state["editar_igreja"] = False
+                st.rerun()
+                
+        # Modo de Visualização
         else:
-            st.error("Falha ao excluir a Igreja.")
+            st.subheader("Igreja Cadastrada")
+            if igreja["logotipo"] is not None:
+                st.image(igreja["logotipo"], caption="Logotipo da Igreja", width=200)
+            st.write(f"**CNPJ:** {igreja['cnpj']}")
+            st.write(f"**Data de Abertura:** {igreja['data_abertura']}")
+            st.write(f"**Endereço:** {igreja['endereco']}")
+            st.write(f"**Nome do Pastor:** {igreja['pastor_nome']}")
+            st.write(f"**Data de Entrada do Pastor:** {igreja['pastor_entrada']}")
+            st.write(f"**Data de Saída do Pastor:** {igreja['pastor_saida']}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Editar Dados da Igreja"):
+                    st.session_state["editar_igreja"] = True
+                    st.rerun()
+            with col2:
+                if st.button("Excluir Igreja"):
+                    delete_sql = "DELETE FROM Igreja WHERE cnpj = ?"
+                    ok_delete = execute_query(delete_sql, (igreja["cnpj"],))
+                    if ok_delete:
+                        st.success("Igreja excluída com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Falha ao excluir a Igreja.")
+                        
+    else:
+        # Caso não exista nenhum cadastro, exibe o formulário de cadastro
+        st.subheader("Cadastrar Nova Igreja")
+        with st.form("form_nova_igreja"):
+            uploaded_logo = st.file_uploader("Selecione o logotipo da Igreja (opcional)", 
+                                             type=["png", "jpg", "jpeg"])
+            logotipo_bin = uploaded_logo.read() if uploaded_logo is not None else None
 
+            cnpj_val = st.text_input("CNPJ da Igreja*")
+            data_abertura_val = st.date_input("Data de Abertura*", value=None, min_value=datetime.date(1900, 1, 1))
+            endereco_val = st.text_input("Endereço*")
+            pastor_nome_val = st.text_input("Nome do Pastor*")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=None, min_value=datetime.date(1900, 1, 1))
+            with col2:
+                pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=None, min_value=datetime.date(1900, 1, 1))
+
+            submit_button = st.form_submit_button("Salvar Dados da Igreja")
+            if submit_button:
+                erros = []
+                if not cnpj_val.strip():
+                    erros.append("CNPJ da Igreja")
+                if not endereco_val.strip():
+                    erros.append("Endereço")
+                if not pastor_nome_val.strip():
+                    erros.append("Nome do Pastor")
+                if not data_abertura_val:
+                    erros.append("Data de Abertura")
+                if not pastor_entrada_val:
+                    erros.append("Data de Entrada do Pastor")
+                if not pastor_saida_val:
+                    erros.append("Data de Saída do Pastor")
+                if erros:
+                    texto_erros = "### Atenção!\n\nOs seguintes campos obrigatórios não foram preenchidos:\n\n"
+                    for campo in erros:
+                        texto_erros += f"- {campo}\n"
+                    st.error(texto_erros)
+                else:
+                    insert_sql = """
+                        INSERT INTO Igreja (
+                            logotipo,
+                            cnpj,
+                            data_abertura,
+                            endereco,
+                            pastor_nome,
+                            pastor_entrada,
+                            pastor_saida
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """
+                    params_insert = (
+                        logotipo_bin,
+                        cnpj_val,
+                        data_abertura_val,
+                        endereco_val,
+                        pastor_nome_val,
+                        pastor_entrada_val,
+                        pastor_saida_val
+                    )
+                    ok = execute_query(insert_sql, params_insert)
+                    if ok:
+                        st.success("Dados da Igreja salvos com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Falha ao inserir dados da Igreja.")
 
 
 # -----------------------------------------------------------------------------
@@ -278,7 +335,7 @@ def page_membros():
     # Formulário de adicionar novo membro
     with st.expander("Adicionar Membro"):
         with st.form("form_add_membro"):
-            matricula = st.text_input("Matrícula*")
+            # matricula = st.text_input("Matrícula*")
             nome = st.text_input("Nome completo*")
             uploaded_foto = st.file_uploader("Foto do Membro (opcional)", 
                                                 type=["png", "jpg", "jpeg"])
@@ -322,8 +379,8 @@ def page_membros():
             if submitted:
                 
                 erros = []
-                if not matricula.strip():
-                    erros.append("Matrícula")
+                # if not matricula.strip():
+                    # erros.append("Matrícula")
                 if not nome.strip():
                     erros.append("Nome completo")
                 if not ministerio.strip():
@@ -359,17 +416,16 @@ def page_membros():
 
                     insert_sql = """
                         INSERT INTO Membros (
-                            matricula, nome, foto, ministerio, endereco, telefone, sexo,
+                            nome, foto, ministerio, endereco, telefone, sexo,
                             data_nascimento, estado_civil, nome_conjuge,
                             disciplina_data_ini, disciplina_data_fim, data_entrada,
                             tipo_entrada, data_desligamento, motivo_desligamento,
                             mes_aniversario
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
                         """
                     params = (
-                        matricula,
                         nome,
                         foto_bytes,
                         ministerio,
@@ -397,7 +453,7 @@ def page_membros():
                         st.error(f"Falha ao inserir membro: {sucesso}")
 
                     new_row = {
-                        "matricula": matricula,
+                        # "matricula": matricula,
                         "nome": nome,
                         "foto": foto_bytes,
                         "ministerio": ministerio,
@@ -415,6 +471,8 @@ def page_membros():
                         "motivo_desligamento": motivo_desligamento,
                         "mes_aniversario": mes_aniversario
                     }
+                time.sleep(1)
+                st.rerun()
     
 
     # Exibição e edição dos membros
@@ -424,6 +482,9 @@ def page_membros():
         hide_index=True,
         use_container_width=True,
         key="membros_editor",
+        column_config={
+            "matricula": st.column_config.TextColumn("Matrícula", disabled=True)
+        }
     ) 
     
 # ============================================
@@ -464,6 +525,8 @@ def page_membros():
        
         st.session_state["membros_data"] = edited_df
         st.success("Alterações atualizadas!")
+        time.sleep(1)
+        st.rerun()
 
  # ======================================
  # 4) EXCLUIR DO BANCO (DELETE)
@@ -481,18 +544,24 @@ def page_membros():
 
             if st.button("Confirmar Exclusão"):
                 if matricula_excluir in membros_df["matricula"].values:
+                    try:
+                        matricula_param = int(matricula_excluir)
+                    except Exception:
+                        matricula_param = matricula_excluir
 
                     delete_sql = "DELETE FROM Membros WHERE matricula = ?"
-                    sucesso = execute_query(delete_sql, (matricula_excluir,))
-                    if sucesso:
-                        st.success(f"Membro '{matricula_excluir}' excluído.")
+                    sucesso = execute_query(delete_sql, (matricula_param,))
+                    if sucesso is True:
+                        st.success(f"Membro '{matricula_param}' excluído.")
                         # Recarrega a lista
                         df_membros = read_records("SELECT * FROM Membros")
                         st.session_state["membros_data"] = df_membros
+                        time.sleep(1)
+                        st.rerun()
                     else:
-                        st.error("Falha ao excluir membro.")
+                        st.error(f"Falha ao excluir membro. {sucesso}")
                 else:
-                    st.warning(f"A matrícula '{matricula_excluir}' não foi encontrada.")
+                    st.warning(f"A matrícula '{matricula_param}' não foi encontrada.")
     
    
         # Pré-visualizar fotos (caso queira)
