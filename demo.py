@@ -17,10 +17,10 @@ st.set_page_config(page_title="Demonstração Local", layout="wide")
 # Conexão com banco de dados
 # -----------------------------------------------------------------------------
 def get_connection():
-    server = 'igrejacanaa.database.windows.net,1433'
-    database = 'ibcanaa'
-    username = 'adm'
-    password = 'Igreja2025'
+    server = st.secrets["server"]
+    database = st.secrets["database"]
+    username = st.secrets["username"]
+    password = st.secrets["password"]
     driver = '{ODBC Driver 17 for SQL Server}'
     try:
         conx = pyodbc.connect(
