@@ -107,6 +107,7 @@ def login_screen():
         if user in CREDENTIALS and password == CREDENTIALS[user]:
             st.session_state["logged_in"] = True
             st.session_state["user_role"] = user
+            st.rerun()
         else:
             st.error("Usuário ou senha inválidos. Tente novamente.")
 
