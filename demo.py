@@ -17,6 +17,7 @@ st.set_page_config(page_title="Demonstração Local", layout="wide")
 # -----------------------------------------------------------------------------
 # Conexão com banco de dados
 # -----------------------------------------------------------------------------
+
 def get_connection():
     server = st.secrets["server"]
     database = st.secrets["database"]
@@ -139,7 +140,7 @@ if "igreja_data" not in st.session_state:
 if "membros_data" not in st.session_state:
     st.session_state["membros_data"] = pd.DataFrame(columns=[
         "id", "matricula", "nome", "foto", "ministerio", "endereco",
-        "telefone", "sexo", "data_nascimento", "estado_civil", "nome_conjuge",
+        "telefone", "email", "sexo", "data_nascimento", "estado_civil", "nome_conjuge",
         "disciplina_data_ini", "disciplina_data_fim", "data_entrada",
         "tipo_entrada", "data_desligamento", "motivo_desligamento",
         "mes_aniversario"
@@ -149,6 +150,7 @@ if "membros_data" not in st.session_state:
 # -----------------------------------------------------------------------------
 # PÁGINA 1: Cadastro da Igreja
 # -----------------------------------------------------------------------------
+
 def page_igreja():
     st.header("Cadastro de Igreja")
 
@@ -161,7 +163,7 @@ def page_igreja():
             st.info("Nenhuma igreja cadastrada.")
         else:
             igreja = df_igreja.iloc[0]
-            if igreja["logotipo"] is not None:
+            if igreja.get("logotipo") is not None:
                 st.image(igreja["logotipo"], caption="Logotipo da Igreja", width=200)
             st.write(f"**CNPJ:** {igreja['cnpj']}")
             st.write(f"**Data de Abertura:** {igreja['data_abertura']}")
@@ -243,7 +245,7 @@ def page_igreja():
         # Modo de Visualização
         else:
             st.subheader("Igreja Cadastrada")
-            if igreja["logotipo"] is not None:
+            if igreja.get("logotipo") is not None:
                 st.image(igreja["logotipo"], caption="Logotipo da Igreja", width=200)
             st.write(f"**CNPJ:** {igreja['cnpj']}")
             st.write(f"**Data de Abertura:** {igreja['data_abertura']}")
@@ -352,7 +354,7 @@ def page_membros():
             st.dataframe(df_membros)
             st.subheader("Fotos dos Membros")
             for _, row in df_membros.iterrows():
-                if row["foto"] is not None:
+                if row.get("foto") is not None:
                     st.image(row["foto"], caption=row['nome'], width=100)
         return
 
@@ -370,24 +372,33 @@ def page_membros():
             nome = st.text_input("Nome completo*")
             uploaded_foto = st.file_uploader("Foto do Membro (opcional)", type=["png", "jpg", "jpeg"])
             foto_bytes = uploaded_foto.read() if uploaded_foto is not None else None
-            ministerio = st.text_input("Ministério*")
-            endereco = st.text_input("Endereço*")
-            telefone = st.text_input("Telefone* (DDXXXXXXXXX)")
+            ministerio = st.text_input("Ministério (opcional)")
+            endereco = st.text_input("Endereço (opcional)")
+            telefone = st.text_input("Telefone (opcional) (DDXXXXXXXXX)")
+            email = st.text_input("E-mail (opcional)")
             sexo = st.selectbox("Sexo*", ["Selecione...", "Masculino", "Feminino", "Outro"])
-            data_nascimento = st.date_input("Data de Nascimento*", min_value=datetime.date(1900, 1, 1))
-            estado_civil = st.selectbox("Estado Civil*", ["Selecione...", "Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)"])
+            # Tenta usar o formato brasileiro no date_input (Streamlit 1.30+). Caso sua versão não suporte,
+            # o valor ainda será um date válido; mostramos uma legenda formatada abaixo.
+            try:
+                data_nascimento = st.date_input("Data de Nascimento*", min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+            except TypeError:
+                data_nascimento = st.date_input("Data de Nascimento*", min_value=datetime.date(1900, 1, 1))
+            if data_nascimento:
+                st.caption(f"Selecionado: {data_nascimento.strftime('%d/%m/%Y')}")
+
+            estado_civil = st.selectbox("Estado Civil (opcional)", ["Selecione...", "Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)"])
             nome_conjuge = st.text_input("Nome do Cônjuge (se Casado)")
-            disciplina_data_ini = st.date_input("Data de início Disciplina", min_value=datetime.date(1900, 1, 1))
-            disciplina_data_fim = st.date_input("Data de saída Disciplina", min_value=datetime.date(1900, 1, 1))
-            data_entrada = st.date_input("Data de entrada (Ativo)*", value=datetime.date.today(), min_value=datetime.date(1900, 1, 1))
-            tipo_entrada = st.selectbox("Tipo de entrada*", ["Selecione...", "Batismo", "Transferência", "Aclamação"])
-            data_desligamento = st.date_input("Data do desligamento (Inativo)", min_value=datetime.date(1900, 1, 1))
-            motivo_desligamento = st.selectbox("Motivo do Desligamento", ["Nenhum", "A pedido", "Ausência", "Transferência", "Outra denominação", "Outros motivos"])
+            disciplina_data_ini = st.date_input("Data de início Disciplina (opcional)", min_value=datetime.date(1900, 1, 1))
+            disciplina_data_fim = st.date_input("Data de saída Disciplina (opcional)", min_value=datetime.date(1900, 1, 1))
+            data_entrada = st.date_input("Data de entrada (Ativo) (opcional)", value=datetime.date.today(), min_value=datetime.date(1900, 1, 1))
+            tipo_entrada = st.selectbox("Tipo de entrada*", ["Selecione...", "Batismo", "Transferência", "Aclamação", "Reconciliação"])
+            data_desligamento = st.date_input("Data do desligamento (Inativo) (opcional)", min_value=datetime.date(1900, 1, 1))
+            motivo_desligamento = st.selectbox("Motivo do Desligamento (opcional)", ["Nenhum", "A pedido", "Ausência", "Transferência", "Outra denominação", "Outros motivos"])
 
             submitted = st.form_submit_button("Adicionar Membro")
             if submitted:
                 erros = []
-                # Validações básicas
+                # Validações obrigatórias: Matrícula, Nome, Data de nascimento, Sexo
                 if not matricula_input.strip():
                     erros.append("Matrícula")
                 else:
@@ -395,44 +406,43 @@ def page_membros():
                         matricula_val = int(matricula_input)
                     except ValueError:
                         erros.append("Matrícula deve ser um número inteiro")
-                if not nome.strip(): erros.append("Nome completo")
-                if not ministerio.strip(): erros.append("Ministério")
-                if not endereco.strip(): erros.append("Endereço")
-                if not telefone.strip(): erros.append("Telefone")
-                if sexo == "Selecione...": erros.append("Sexo")
-                if estado_civil == "Selecione...": erros.append("Estado Civil")
-                if estado_civil == "Casado(a)" and not nome_conjuge.strip(): erros.append("Nome do Cônjuge")
-                if tipo_entrada == "Selecione...": erros.append("Tipo de entrada")
-                if not data_nascimento: erros.append("Data de Nascimento")
+                if not nome.strip():
+                    erros.append("Nome completo")
+                if not data_nascimento:
+                    erros.append("Data de Nascimento")
+                if sexo == "Selecione...":
+                    erros.append("Sexo")
+
                 if erros:
                     st.error("Preencha corretamente os campos obrigatórios: " + ", ".join(erros))
                 else:
-                    mes_aniversario = data_nascimento.month
+                    mes_aniversario = data_nascimento.month if data_nascimento else None
 
                     insert_sql = """
                         INSERT INTO Membros (
-                            matricula, nome, foto, ministerio, endereco, telefone, sexo,
+                            matricula, nome, foto, ministerio, endereco, telefone, email, sexo,
                             data_nascimento, estado_civil, nome_conjuge,
                             disciplina_data_ini, disciplina_data_fim, data_entrada,
                             tipo_entrada, data_desligamento, motivo_desligamento,
                             mes_aniversario
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """
                     params = (
                         matricula_val,
                         nome,
                         foto_bytes,
-                        ministerio,
-                        endereco,
-                        telefone,
+                        ministerio if ministerio.strip() else None,
+                        endereco if endereco.strip() else None,
+                        telefone if telefone.strip() else None,
+                        email if email.strip() else None,
                         sexo,
-                        data_nascimento,
-                        estado_civil,
-                        nome_conjuge,
+                        data_nascimento,  # armazenado como DATE no banco; formatação é de exibição
+                        None if estado_civil == "Selecione..." else estado_civil,
+                        nome_conjuge if nome_conjuge.strip() else None,
                         disciplina_data_ini,
                         disciplina_data_fim,
                         data_entrada,
-                        tipo_entrada,
+                        None if tipo_entrada == "Selecione..." else tipo_entrada,
                         data_desligamento,
                         motivo_desligamento,
                         mes_aniversario
@@ -447,7 +457,7 @@ def page_membros():
     # Exibição e edição dos membros
     st.subheader("Listagem de Membros")
 
-    df_editor = membros_df.drop(columns=["foto"])
+    df_editor = membros_df.drop(columns=["foto"], errors='ignore')
     edited_df = st.data_editor(
         df_editor,
         hide_index=True,
@@ -463,30 +473,31 @@ def page_membros():
         for _, row in edited_df.iterrows():
             update_sql = """
                 UPDATE Membros
-                SET matricula = ?, nome = ?, ministerio = ?, endereco = ?, telefone = ?, sexo = ?,
+                SET matricula = ?, nome = ?, ministerio = ?, endereco = ?, telefone = ?, email = ?, sexo = ?,
                     data_nascimento = ?, estado_civil = ?, nome_conjuge = ?,
                     disciplina_data_ini = ?, disciplina_data_fim = ?, data_entrada = ?,
                     tipo_entrada = ?, data_desligamento = ?, motivo_desligamento = ?, mes_aniversario = ?
                 WHERE id = ?
             """
             update_params = (
-                row["matricula"],
-                row["nome"],
-                row["ministerio"],
-                row["endereco"],
-                row["telefone"],
-                row["sexo"],
-                row["data_nascimento"],
-                row["estado_civil"],
-                row["nome_conjuge"],
-                row["disciplina_data_ini"],
-                row["disciplina_data_fim"],
-                row["data_entrada"],
-                row["tipo_entrada"],
-                row["data_desligamento"],
-                row["motivo_desligamento"],
-                row["mes_aniversario"],
-                row["id"]
+                row.get("matricula"),
+                row.get("nome"),
+                row.get("ministerio"),
+                row.get("endereco"),
+                row.get("telefone"),
+                row.get("email"),
+                row.get("sexo"),
+                row.get("data_nascimento"),
+                row.get("estado_civil"),
+                row.get("nome_conjuge"),
+                row.get("disciplina_data_ini"),
+                row.get("disciplina_data_fim"),
+                row.get("data_entrada"),
+                row.get("tipo_entrada"),
+                row.get("data_desligamento"),
+                row.get("motivo_desligamento"),
+                row.get("mes_aniversario"),
+                row.get("id")
             )
             execute_query(update_sql, update_params)
         st.success("Alterações atualizadas!")
@@ -494,7 +505,10 @@ def page_membros():
 
     # Exclusão de membro
     with st.expander("Excluir Membro"):
-        lista_ids = list(membros_df["id"].unique())
+        if "id" in membros_df.columns:
+            lista_ids = list(membros_df["id"].dropna().unique())
+        else:
+            lista_ids = []
         if not lista_ids:
             st.info("Não há membros cadastrados para exclusão.")
         else:
@@ -505,7 +519,7 @@ def page_membros():
             if st.button("Confirmar Exclusão"):
                 try:
                     id_param = int(id_excluir)
-                except ValueError:
+                except (ValueError, TypeError):
                     st.error("ID inválido.")
                     return
                 delete_sql = "DELETE FROM Membros WHERE id = ?"
@@ -521,7 +535,7 @@ def page_membros():
     # Pré-visualizar fotos
     st.subheader("Fotos dos Membros")
     for _, row in st.session_state["membros_data"].iterrows():
-        if row["foto"] is not None:
+        if row.get("foto") is not None:
             st.image(row["foto"], caption=row['nome'], width=100)
 
 # -----------------------------------------------------------------------------
@@ -632,6 +646,7 @@ def page_relatorios():
 # -----------------------------------------------------------------------------
 # Página 4 (exclusiva para adm-financeiro): Página Financeira
 # -----------------------------------------------------------------------------
+
 def page_financeiro():
     st.header("Página Financeira")
     st.write("Aqui você pode adicionar funcionalidades financeiras, por exemplo.")
@@ -639,6 +654,7 @@ def page_financeiro():
 # -----------------------------------------------------------------------------
 # Página 5 (exclusiva para adm-secretaria): Página para secretários
 # -----------------------------------------------------------------------------
+
 def page_secretaria():
     st.header("Página da Secretaria")
     st.write("Aqui você pode adicionar funcionalidades financeiras, por exemplo.")
