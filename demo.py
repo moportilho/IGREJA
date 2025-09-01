@@ -15,6 +15,38 @@ from docx import Document
 st.set_page_config(page_title="Demonstração Local", layout="wide")
 
 # -----------------------------------------------------------------------------
+# Helpers de data (somente EXIBIÇÃO em PT-BR)
+# -----------------------------------------------------------------------------
+def fmt_date_br(d):
+    """Converte uma data para 'DD/MM/YYYY' somente para exibição."""
+    if d is None or d == "":
+        return ""
+    if isinstance(d, (datetime.date, datetime.datetime)):
+        return d.strftime("%d/%m/%Y")
+    # tenta normalizar com pandas
+    ts = pd.to_datetime(d, errors="coerce")
+    if pd.isna(ts):
+        return ""
+    return ts.strftime("%d/%m/%Y")
+
+def df_to_br_display(df, date_cols):
+    """Retorna uma cópia do DF com colunas de data formatadas como 'DD/MM/YYYY'."""
+    df2 = df.copy()
+    for c in date_cols:
+        if c in df2.columns:
+            s = pd.to_datetime(df2[c], errors="coerce")
+            s = s.dt.strftime("%d/%m/%Y")
+            df2[c] = s.fillna("")
+    return df2
+
+def safe_date(v, default=None):
+    if isinstance(v, datetime.datetime):
+        return v.date()
+    if isinstance(v, datetime.date):
+        return v
+    return default or datetime.date.today()
+
+# -----------------------------------------------------------------------------
 # Conexão com banco de dados
 # -----------------------------------------------------------------------------
 
@@ -166,11 +198,11 @@ def page_igreja():
             if igreja.get("logotipo") is not None:
                 st.image(igreja["logotipo"], caption="Logotipo da Igreja", width=200)
             st.write(f"**CNPJ:** {igreja['cnpj']}")
-            st.write(f"**Data de Abertura:** {igreja['data_abertura']}")
+            st.write(f"**Data de Abertura:** {fmt_date_br(igreja['data_abertura'])}")
             st.write(f"**Endereço:** {igreja['endereco']}")
             st.write(f"**Nome do Pastor:** {igreja['pastor_nome']}")
-            st.write(f"**Data de Entrada do Pastor:** {igreja['pastor_entrada']}")
-            st.write(f"**Data de Saída do Pastor:** {igreja['pastor_saida']}")
+            st.write(f"**Data de Entrada do Pastor:** {fmt_date_br(igreja['pastor_entrada'])}")
+            st.write(f"**Data de Saída do Pastor:** {fmt_date_br(igreja['pastor_saida'])}")
         return
 
     # Para usuários com permissões de edição (adm, adm-financeiro)
@@ -182,12 +214,10 @@ def page_igreja():
         if "editar_igreja" not in st.session_state:
             st.session_state["editar_igreja"] = False
 
-        
         # Modo de Edição
         if st.session_state["editar_igreja"]:
             st.subheader("Editar Dados da Igreja")
             with st.form("form_editar_igreja"):
-                # Campo para logotipo: se um novo for enviado, substitui; caso contrário, mantém o atual
                 uploaded_logo = st.file_uploader("Selecione um novo logotipo da Igreja (opcional)", 
                                                    type=["png", "jpg", "jpeg"])
                 if uploaded_logo is not None:
@@ -195,17 +225,27 @@ def page_igreja():
                 else:
                     logotipo_bin = igreja["logotipo"]
                 
-                # CNPJ não é editável, pois é a chave primária
                 cnpj_val = st.text_input("CNPJ da Igreja*", value=igreja["cnpj"], disabled=True)
-                data_abertura_val = st.date_input("Data de Abertura*", value=igreja["data_abertura"])
+
+                try:
+                    data_abertura_val = st.date_input("Data de Abertura*", value=safe_date(igreja["data_abertura"]), format="DD/MM/YYYY")
+                except TypeError:
+                    data_abertura_val = st.date_input("Data de Abertura*", value=safe_date(igreja["data_abertura"]))
+
                 endereco_val = st.text_input("Endereço*", value=igreja["endereco"])
                 pastor_nome_val = st.text_input("Nome do Pastor*", value=igreja["pastor_nome"])
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=igreja["pastor_entrada"])
+                    try:
+                        pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=safe_date(igreja["pastor_entrada"]), format="DD/MM/YYYY")
+                    except TypeError:
+                        pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=safe_date(igreja["pastor_entrada"]))
                 with col2:
-                    pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=igreja["pastor_saida"])
+                    try:
+                        pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=safe_date(igreja["pastor_saida"]), format="DD/MM/YYYY")
+                    except TypeError:
+                        pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=safe_date(igreja["pastor_saida"]))
                 
                 submit_edit = st.form_submit_button("Atualizar Dados")
                 
@@ -233,11 +273,10 @@ def page_igreja():
                     if ok_update:
                         st.success("Dados da Igreja atualizados com sucesso!")
                         st.session_state["editar_igreja"] = False
-                        st.rerun()  # Atualiza a página para refletir as mudanças
+                        st.rerun()
                     else:
                         st.error("Falha ao atualizar os dados da Igreja.")
             
-            # Botão para cancelar a edição
             if st.button("Cancelar Edição"):
                 st.session_state["editar_igreja"] = False
                 st.rerun()
@@ -248,11 +287,11 @@ def page_igreja():
             if igreja.get("logotipo") is not None:
                 st.image(igreja["logotipo"], caption="Logotipo da Igreja", width=200)
             st.write(f"**CNPJ:** {igreja['cnpj']}")
-            st.write(f"**Data de Abertura:** {igreja['data_abertura']}")
+            st.write(f"**Data de Abertura:** {fmt_date_br(igreja['data_abertura'])}")
             st.write(f"**Endereço:** {igreja['endereco']}")
             st.write(f"**Nome do Pastor:** {igreja['pastor_nome']}")
-            st.write(f"**Data de Entrada do Pastor:** {igreja['pastor_entrada']}")
-            st.write(f"**Data de Saída do Pastor:** {igreja['pastor_saida']}")
+            st.write(f"**Data de Entrada do Pastor:** {fmt_date_br(igreja['pastor_entrada'])}")
+            st.write(f"**Data de Saída do Pastor:** {fmt_date_br(igreja['pastor_saida'])}")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -278,15 +317,24 @@ def page_igreja():
             logotipo_bin = uploaded_logo.read() if uploaded_logo is not None else None
 
             cnpj_val = st.text_input("CNPJ da Igreja*")
-            data_abertura_val = st.date_input("Data de Abertura*", value=None, min_value=datetime.date(1900, 1, 1))
+            try:
+                data_abertura_val = st.date_input("Data de Abertura*", value=None, min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+            except TypeError:
+                data_abertura_val = st.date_input("Data de Abertura*", value=None, min_value=datetime.date(1900, 1, 1))
             endereco_val = st.text_input("Endereço*")
             pastor_nome_val = st.text_input("Nome do Pastor*")
 
             col1, col2 = st.columns(2)
             with col1:
-                pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=None, min_value=datetime.date(1900, 1, 1))
+                try:
+                    pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=None, min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+                except TypeError:
+                    pastor_entrada_val = st.date_input("Data de Entrada do Pastor*", value=None, min_value=datetime.date(1900, 1, 1))
             with col2:
-                pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=None, min_value=datetime.date(1900, 1, 1))
+                try:
+                    pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=None, min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+                except TypeError:
+                    pastor_saida_val = st.date_input("Data de Saída do Pastor*", value=None, min_value=datetime.date(1900, 1, 1))
 
             submit_button = st.form_submit_button("Salvar Dados da Igreja")
             if submit_button:
@@ -351,7 +399,9 @@ def page_membros():
             st.info("Ainda não há nenhum membro adicionado.")
         else:
             st.subheader("Listagem de Membros")
-            st.dataframe(df_membros)
+            cols_dt_m = ["data_nascimento","disciplina_data_ini","disciplina_data_fim","data_entrada","data_desligamento"]
+            df_membros_br = df_to_br_display(df_membros, cols_dt_m)
+            st.dataframe(df_membros_br, use_container_width=True)
             st.subheader("Fotos dos Membros")
             for _, row in df_membros.iterrows():
                 if row.get("foto") is not None:
@@ -377,8 +427,7 @@ def page_membros():
             telefone = st.text_input("Telefone (opcional) (DDXXXXXXXXX)")
             email = st.text_input("E-mail (opcional)")
             sexo = st.selectbox("Sexo*", ["Selecione...", "Masculino", "Feminino", "Outro"])
-            # Tenta usar o formato brasileiro no date_input (Streamlit 1.30+). Caso sua versão não suporte,
-            # o valor ainda será um date válido; mostramos uma legenda formatada abaixo.
+
             try:
                 data_nascimento = st.date_input("Data de Nascimento*", min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
             except TypeError:
@@ -388,17 +437,34 @@ def page_membros():
 
             estado_civil = st.selectbox("Estado Civil (opcional)", ["Selecione...", "Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)"])
             nome_conjuge = st.text_input("Nome do Cônjuge (se Casado)")
-            disciplina_data_ini = st.date_input("Data de início Disciplina (opcional)", min_value=datetime.date(1900, 1, 1))
-            disciplina_data_fim = st.date_input("Data de saída Disciplina (opcional)", min_value=datetime.date(1900, 1, 1))
-            data_entrada = st.date_input("Data de entrada (Ativo) (opcional)", value=datetime.date.today(), min_value=datetime.date(1900, 1, 1))
+
+            try:
+                disciplina_data_ini = st.date_input("Data de início Disciplina (opcional)", min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+            except TypeError:
+                disciplina_data_ini = st.date_input("Data de início Disciplina (opcional)", min_value=datetime.date(1900, 1, 1))
+
+            try:
+                disciplina_data_fim = st.date_input("Data de saída Disciplina (opcional)", min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+            except TypeError:
+                disciplina_data_fim = st.date_input("Data de saída Disciplina (opcional)", min_value=datetime.date(1900, 1, 1))
+
+            try:
+                data_entrada = st.date_input("Data de entrada (Ativo) (opcional)", value=datetime.date.today(), min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+            except TypeError:
+                data_entrada = st.date_input("Data de entrada (Ativo) (opcional)", value=datetime.date.today(), min_value=datetime.date(1900, 1, 1))
+
             tipo_entrada = st.selectbox("Tipo de entrada*", ["Selecione...", "Batismo", "Transferência", "Aclamação", "Reconciliação"])
-            data_desligamento = st.date_input("Data do desligamento (Inativo) (opcional)", min_value=datetime.date(1900, 1, 1))
+
+            try:
+                data_desligamento = st.date_input("Data do desligamento (Inativo) (opcional)", min_value=datetime.date(1900, 1, 1), format="DD/MM/YYYY")
+            except TypeError:
+                data_desligamento = st.date_input("Data do desligamento (Inativo) (opcional)", min_value=datetime.date(1900, 1, 1))
+
             motivo_desligamento = st.selectbox("Motivo do Desligamento (opcional)", ["Nenhum", "A pedido", "Ausência", "Transferência", "Outra denominação", "Outros motivos"])
 
             submitted = st.form_submit_button("Adicionar Membro")
             if submitted:
                 erros = []
-                # Validações obrigatórias: Matrícula, Nome, Data de nascimento, Sexo
                 if not matricula_input.strip():
                     erros.append("Matrícula")
                 else:
@@ -436,7 +502,7 @@ def page_membros():
                         telefone if telefone.strip() else None,
                         email if email.strip() else None,
                         sexo,
-                        data_nascimento,  # armazenado como DATE no banco; formatação é de exibição
+                        data_nascimento,  # armazenado como DATE
                         None if estado_civil == "Selecione..." else estado_civil,
                         nome_conjuge if nome_conjuge.strip() else None,
                         disciplina_data_ini,
@@ -464,9 +530,70 @@ def page_membros():
         use_container_width=True,
         key="membros_editor",
         column_config={
-            "id": st.column_config.TextColumn("ID", disabled=True)
+            "id": st.column_config.TextColumn("ID", disabled=True),
+            "data_nascimento": st.column_config.DateColumn("Data de Nascimento", format="DD/MM/YYYY"),
+            "disciplina_data_ini": st.column_config.DateColumn("Início Disciplina", format="DD/MM/YYYY"),
+            "disciplina_data_fim": st.column_config.DateColumn("Fim Disciplina", format="DD/MM/YYYY"),
+            "data_entrada": st.column_config.DateColumn("Data de Entrada", format="DD/MM/YYYY"),
+            "data_desligamento": st.column_config.DateColumn("Data de Desligamento", format="DD/MM/YYYY"),
         }
     )
+
+    # -----------------------------------------
+    # Atualizar / Remover foto do membro
+    # -----------------------------------------
+    with st.expander("🖼️ Atualizar foto do membro"):
+        if membros_df.empty:
+            st.info("Cadastre membros para poder editar a foto.")
+        else:
+            membro_sel = st.selectbox(
+                "Selecione o membro",
+                options=membros_df["id"],
+                format_func=lambda i: membros_df.loc[membros_df["id"] == i, "nome"].values[0]
+            )
+
+            # Mostra a foto atual (se existir)
+            row_atual = membros_df.loc[membros_df["id"] == membro_sel].iloc[0]
+            st.write(f"**Membro:** {row_atual['nome']}")
+            if row_atual.get("foto") is not None:
+                st.image(row_atual["foto"], caption="Foto atual", width=150)
+            else:
+                st.caption("Sem foto cadastrada.")
+
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                nova_foto = st.file_uploader(
+                    "Nova foto (PNG/JPG/JPEG)",
+                    type=["png", "jpg", "jpeg"],
+                    key="upload_foto_edit"
+                )
+                if st.button("Salvar nova foto"):
+                    if nova_foto is None:
+                        st.warning("Envie uma imagem antes de salvar.")
+                    else:
+                        foto_bytes_nova = nova_foto.read()
+                        ok = execute_query(
+                            "UPDATE Membros SET foto = ? WHERE id = ?",
+                            (foto_bytes_nova, int(membro_sel))
+                        )
+                        if ok is True:
+                            st.success("Foto atualizada com sucesso!")
+                            st.rerun()
+                        else:
+                            st.error(f"Falha ao atualizar foto: {ok}")
+
+            with col_f2:
+                if st.button("Remover foto atual"):
+                    ok = execute_query(
+                        "UPDATE Membros SET foto = NULL WHERE id = ?",
+                        (int(membro_sel),)
+                    )
+                    if ok is True:
+                        st.success("Foto removida com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error(f"Falha ao remover foto: {ok}")
+
 
     # Salvar edições no banco
     if st.button("Salvar Alterações de Edição"):
@@ -531,7 +658,6 @@ def page_membros():
                 else:
                     st.error(f"Falha ao excluir membro: {sucesso}")
 
-
     # Pré-visualizar fotos
     st.subheader("Fotos dos Membros")
     for _, row in st.session_state["membros_data"].iterrows():
@@ -552,14 +678,12 @@ def page_relatorios():
     # 1) Geração de PDF do Certificado de Batismo
     with col1:
         if st.button("Gerar PDF - Certificado de Batismo"):
-            # Exemplo de uso de FPDF (biblioteca fpdf)
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", size=16, style='B')
             pdf.cell(200, 10, txt="CERTIFICADO DE BATISMO", ln=1, align='C')
             pdf.set_font("Arial", size=12)
 
-            # Conteúdo simples de exemplo
             pdf.ln(10)
             pdf.multi_cell(0, 10, txt=(
                 "Declaramos que o membro [NOME] recebeu o Santo Batismo nesta igreja,\n"
@@ -568,8 +692,7 @@ def page_relatorios():
                 "_________________________________________"
             ))
 
-            # Gera PDF em memória
-            pdf_data = pdf.output(dest="S").encode("latin-1")  # FPDF gera em bytes
+            pdf_data = pdf.output(dest="S").encode("latin-1")
             st.download_button(
                 label="Baixar PDF Certificado",
                 data=pdf_data,
@@ -592,7 +715,6 @@ def page_relatorios():
             )
             p.add_run("Atenciosamente,\n[Igreja de Origem]")
 
-            # Salvar em memória
             doc_buffer = BytesIO()
             doc.save(doc_buffer)
             doc_buffer.seek(0)
@@ -634,8 +756,9 @@ def page_relatorios():
     st.subheader("Gerar Excel dos Membros Cadastrados")
     if st.button("Gerar Excel"):
         output = BytesIO()
+        membros_sem_foto = st.session_state["membros_data"].drop(columns=["foto"], errors="ignore")
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            membros_df.to_excel(writer, sheet_name="Membros", index=False)
+            membros_sem_foto.to_excel(writer, sheet_name="Membros", index=False)
         st.download_button(
             label="Baixar Excel com Membros",
             data=output.getvalue(),
@@ -643,13 +766,234 @@ def page_relatorios():
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
+
 # -----------------------------------------------------------------------------
 # Página 4 (exclusiva para adm-financeiro): Página Financeira
 # -----------------------------------------------------------------------------
+def ensure_finance_schema():
+    """
+    Garante a existência da tabela/índices financeiros no SQL Server.
+    """
+    ddl = """
+    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[DizimoLancamentos]') AND type in (N'U'))
+    BEGIN
+        CREATE TABLE [dbo].[DizimoLancamentos](
+            [id]                INT IDENTITY(1,1) PRIMARY KEY,
+            [membro_id]         INT NOT NULL,
+            [competencia]       DATE NOT NULL,
+            [valor_dizimo]      DECIMAL(10,2) NOT NULL DEFAULT 0,
+            [valor_oferta]      DECIMAL(10,2) NOT NULL DEFAULT 0,
+            [data_pagamento]    DATE NOT NULL,
+            [forma_pagamento]   VARCHAR(30) NULL,
+            [observacoes]       NVARCHAR(255) NULL,
+            [criado_em]         DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+            [atualizado_em]     DATETIME2 NULL
+        );
+        ALTER TABLE [dbo].[DizimoLancamentos]
+            ADD CONSTRAINT FK_Dizimos_Membro
+            FOREIGN KEY ([membro_id]) REFERENCES [dbo].[Membros]([id]) ON DELETE CASCADE;
+
+        ALTER TABLE [dbo].[DizimoLancamentos]
+            ADD [ano] AS (YEAR([competencia])) PERSISTED,
+                [mes] AS (MONTH([competencia])) PERSISTED;
+
+        CREATE UNIQUE INDEX UX_Dizimo_MembroCompetencia
+            ON [dbo].[DizimoLancamentos]([membro_id], [ano], [mes]);
+    END
+    """
+    _ = execute_query(ddl)  # Ignora retorno; se já existir, não faz nada
 
 def page_financeiro():
-    st.header("Página Financeira")
-    st.write("Aqui você pode adicionar funcionalidades financeiras, por exemplo.")
+    ensure_finance_schema()  # garante tabela/índices
+
+    st.header("Página Financeira • Dízimos e Ofertas")
+
+    # ==== TABS ====
+    tab1, tab2, tab3 = st.tabs(["➕ Lançar contribuição", "📊 Painel anual (estilo planilha)", "🧾 Gerenciar lançamentos"])
+
+    # ========= TAB 1: Lançar contribuição =========
+    with tab1:
+        st.subheader("Registrar contribuição mensal")
+
+        membros = read_records("SELECT id, nome FROM Membros ORDER BY nome")
+        if membros.empty:
+            st.info("Cadastre membros antes de lançar contribuições.")
+        else:
+            colA, colB, colC = st.columns(3)
+            with colA:
+                membro_escolhido = st.selectbox("Membro*", options=membros["id"], format_func=lambda i: membros.loc[membros["id"]==i, "nome"].values[0])
+            with colB:
+                ano = st.number_input("Ano (competência)*", min_value=1900, max_value=2100, value=datetime.date.today().year, step=1)
+            with colC:
+                mes = st.selectbox("Mês (competência)*", options=list(range(1,13)), format_func=lambda m: datetime.date(2000, m, 1).strftime("%B").capitalize())
+
+            # 1º dia do mês como competência (ex.: 2025-08-01)
+            competencia = datetime.date(int(ano), int(mes), 1)
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                valor_dizimo = st.number_input("Valor do dízimo (R$)*", min_value=0.0, step=10.0, format="%.2f")
+            with col2:
+                valor_oferta = st.number_input("Valor de oferta (R$)", min_value=0.0, step=5.0, value=0.0, format="%.2f")
+            with col3:
+                try:
+                    data_pagamento = st.date_input("Data do pagamento*", value=datetime.date.today(), min_value=datetime.date(1900,1,1), format="DD/MM/YYYY")
+                except TypeError:
+                    data_pagamento = st.date_input("Data do pagamento*", value=datetime.date.today(), min_value=datetime.date(1900,1,1))
+
+            col4, col5 = st.columns(2)
+            with col4:
+                forma_pagamento = st.selectbox("Forma de pagamento", ["Dinheiro", "Pix", "Cartão", "Transferência", "Boleto", "Outro"])
+            with col5:
+                observacoes = st.text_input("Observações (opcional)")
+
+            if st.button("Salvar / Atualizar"):
+                # INSERT; se já existir para (membro, ano, mes), faz UPDATE
+                insert_sql = """
+                    INSERT INTO DizimoLancamentos (membro_id, competencia, valor_dizimo, valor_oferta, data_pagamento, forma_pagamento, observacoes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """
+                params = (int(membro_escolhido), competencia, float(valor_dizimo), float(valor_oferta), data_pagamento, forma_pagamento, observacoes if observacoes.strip() else None)
+                result = execute_query(insert_sql, params)
+
+                if result is True:
+                    st.success("Lançamento salvo.")
+                elif isinstance(result, str) and "Entrada duplicada" in result:
+                    # Já existe: atualiza (UPSERT lógico)
+                    update_sql = """
+                        UPDATE DizimoLancamentos
+                           SET valor_dizimo = ?, valor_oferta = ?, data_pagamento = ?, forma_pagamento = ?, observacoes = ?, atualizado_em = SYSUTCDATETIME()
+                         WHERE membro_id = ? AND ano = YEAR(?) AND mes = MONTH(?)
+                    """
+                    up_params = (float(valor_dizimo), float(valor_oferta), data_pagamento, forma_pagamento, (observacoes if observacoes.strip() else None),
+                                 int(membro_escolhido), competencia, competencia)
+                    ok = execute_query(update_sql, up_params)
+                    if ok is True:
+                        st.success("Lançamento atualizado (competência já existia).")
+                    else:
+                        st.error(f"Falha ao atualizar: {ok}")
+                else:
+                    st.error(f"Falha ao salvar: {result}")
+
+    # ========= TAB 2: Painel anual (estilo planilha) =========
+    with tab2:
+        st.subheader("Visão anual por membro (meses em colunas)")
+
+        ano_sel = st.number_input("Ano", min_value=1900, max_value=2100, value=datetime.date.today().year, step=1)
+        # Busca totais mensais por membro
+        query = """
+            SELECT l.membro_id, m.nome,
+                   l.ano, l.mes,
+                   SUM(l.valor_dizimo)   AS total_dizimo,
+                   SUM(l.valor_oferta)   AS total_oferta
+              FROM DizimoLancamentos l
+              JOIN Membros m ON m.id = l.membro_id
+             WHERE l.ano = ?
+             GROUP BY l.membro_id, m.nome, l.ano, l.mes
+        """
+        df = read_records(query, params=(int(ano_sel),))
+
+        if df.empty:
+            st.info("Sem lançamentos para este ano.")
+        else:
+            # Pivot para ficar igual à planilha de dizimistas (membros x 12 meses)
+            pvt_diz = df.pivot_table(index=["membro_id","nome"], columns="mes", values="total_dizimo", aggfunc="sum", fill_value=0.0)
+            pvt_oft = df.pivot_table(index=["membro_id","nome"], columns="mes", values="total_oferta", aggfunc="sum", fill_value=0.0)
+
+            # Ordena colunas 1..12
+            pvt_diz = pvt_diz.reindex(columns=range(1,13), fill_value=0.0)
+            pvt_oft = pvt_oft.reindex(columns=range(1,13), fill_value=0.0)
+
+            # Renomeia colunas para nomes de meses (abreviados PT-BR)
+            meses = {i: datetime.date(2000,i,1).strftime("%b").capitalize() for i in range(1,13)}
+            pvt_diz.rename(columns=meses, inplace=True)
+            pvt_oft.rename(columns=meses, inplace=True)
+
+            # Totais por linha
+            pvt_diz["Total Dízimo"] = pvt_diz.sum(axis=1)
+            pvt_oft["Total Ofertas"] = pvt_oft.sum(axis=1)
+
+            # Junta em um único dataframe (colunas em blocos)
+            painel = pd.concat(
+                {
+                    "Dízimo (R$)": pvt_diz,
+                    "Ofertas (R$)": pvt_oft
+                },
+                axis=1
+            )
+            painel = painel.reset_index().rename(columns={"membro_id":"ID", "nome":"Membro"})
+
+            st.dataframe(painel, use_container_width=True)
+
+            # Exportar para Excel (achata MultiIndex)
+            painel_excel = painel.copy()
+            if isinstance(painel_excel.columns, pd.MultiIndex):
+                painel_excel.columns = [
+                    " - ".join([str(x) for x in col if x is not None and str(x) != ""])
+                    for col in painel_excel.columns.to_flat_index()
+                ]
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                painel_excel.to_excel(writer, index=False, sheet_name=f"{ano_sel}")
+            st.download_button(
+                label="Baixar Excel do Painel",
+                data=output.getvalue(),
+                file_name=f"painel_dizimistas_{ano_sel}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            # KPIs simples
+            total_ano = df["total_dizimo"].sum() + df["total_oferta"].sum()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Dízimos (ano)", f"R$ {df['total_dizimo'].sum():.2f}")
+            c2.metric("Total Ofertas (ano)", f"R$ {df['total_oferta'].sum():.2f}")
+            c3.metric("Total Geral (ano)",  f"R$ {total_ano:.2f}")
+
+    # ========= TAB 3: Gerenciar lançamentos =========
+    with tab3:
+        st.subheader("Edição/Exclusão de lançamentos")
+        # Filtros
+        colf1, colf2, colf3 = st.columns(3)
+        with colf1:
+            ano_g = st.number_input("Ano", min_value=1900, max_value=2100, value=datetime.date.today().year, step=1, key="ano_g")
+        with colf2:
+            mes_g = st.selectbox("Mês", options=["Todos"] + list(range(1,13)), key="mes_g")
+        with colf3:
+            membro_g = st.text_input("Buscar por nome (contém)")
+
+        base_q = """
+            SELECT l.id, m.nome, l.ano, l.mes, l.valor_dizimo, l.valor_oferta, l.data_pagamento, l.forma_pagamento, l.observacoes
+              FROM DizimoLancamentos l
+              JOIN Membros m ON m.id = l.membro_id
+             WHERE l.ano = ?
+        """
+        params = [int(ano_g)]
+        if mes_g != "Todos":
+            base_q += " AND l.mes = ?"
+            params.append(int(mes_g))
+        if membro_g.strip():
+            base_q += " AND m.nome LIKE ?"
+            params.append(f"%{membro_g.strip()}%")
+        base_q += " ORDER BY m.nome, l.mes"
+
+        lista = read_records(base_q, params=tuple(params))
+        if lista.empty:
+            st.info("Sem lançamentos no filtro.")
+        else:
+            # Exibir data_pagamento em PT-BR
+            lista_br = df_to_br_display(lista, ["data_pagamento"])
+            st.dataframe(lista_br, use_container_width=True)
+
+            # Excluir
+            with st.expander("Excluir lançamento"):
+                id_del = st.selectbox("ID para excluir", options=lista["id"])
+                if st.button("Confirmar exclusão"):
+                    ok = execute_query("DELETE FROM DizimoLancamentos WHERE id = ?", (int(id_del),))
+                    if ok is True:
+                        st.success(f"Lançamento {id_del} excluído.")
+                        st.rerun()
+                    else:
+                        st.error(f"Falha ao excluir: {ok}")
 
 # -----------------------------------------------------------------------------
 # Página 5 (exclusiva para adm-secretaria): Página para secretários
@@ -658,6 +1002,7 @@ def page_financeiro():
 def page_secretaria():
     st.header("Página da Secretaria")
     st.write("Aqui você pode adicionar funcionalidades financeiras, por exemplo.")
+
 # -----------------------------------------------------------------------------
 # LÓGICA PRINCIPAL
 # -----------------------------------------------------------------------------
